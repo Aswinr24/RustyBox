@@ -30,7 +30,7 @@ pub fn disassemble_binary(
     r2.cmd("e bin.cache = true")?;
 
     // Perform analysis
-    let analysis_cmd = if verbose { "aaa" } else { "aaa" }; // Can adjust analysis level
+    let analysis_cmd = { "aaa" };
     debug!("Running analysis: {analysis_cmd}");
     r2.cmd(analysis_cmd)?;
 

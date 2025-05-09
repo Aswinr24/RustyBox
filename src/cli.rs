@@ -10,9 +10,9 @@ use ratatui::{
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
-    text::{Line, Span},
+    text::{Line, Span, Text},
     widgets::BorderType,
-    widgets::{Block, Borders, Paragraph, Tabs},
+    widgets::{Block, Borders, List, ListItem, Paragraph, Tabs},
 };
 use std::{
     io,
@@ -50,6 +50,7 @@ struct AnalysisResult {
     callgraph: Option<Result<String, String>>,
 }
 
+#[allow(dead_code)]
 struct App {
     selected_tab: usize,
     analysis_results: AnalysisResult,
@@ -97,22 +98,22 @@ impl App {
         match self.selected_tab {
             0 => match &self.analysis_results.metadata {
                 Some(Ok(text)) => text.clone(),
-                Some(Err(e)) => format!("Error: {e}"),
+                Some(Err(e)) => format!("Error: {}", e),
                 None => "Loading metadata...".to_string(),
             },
             1 => match &self.analysis_results.disassembly {
                 Some(Ok(text)) => text.clone(),
-                Some(Err(e)) => format!("Error: {e}"),
+                Some(Err(e)) => format!("Error: {}", e),
                 None => "Loading disassembly...".to_string(),
             },
             2 => match &self.analysis_results.decompile {
                 Some(Ok(text)) => text.clone(),
-                Some(Err(e)) => format!("Error: {e}"),
+                Some(Err(e)) => format!("Error: {}", e),
                 None => "Loading decompiled code...".to_string(),
             },
             3 => match &self.analysis_results.callgraph {
                 Some(Ok(text)) => text.clone(),
-                Some(Err(e)) => format!("Error: {e}"),
+                Some(Err(e)) => format!("Error: {}", e),
                 None => "Loading callgraph...".to_string(),
             },
             _ => "Unknown tab".to_string(),
@@ -169,7 +170,7 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
     let file_path = matches.get_one::<String>("FILE").unwrap();
 
     if !Path::new(file_path).exists() {
-        return Err(format!("File does not exist: {file_path}").into());
+        return Err(format!("File does not exist: {}", file_path).into());
     }
     let is_flag_used = matches.get_flag("no-tui")
         || matches.get_flag("metadata")
@@ -212,31 +213,31 @@ fn run_standard_cli(matches: clap::ArgMatches) -> Result<(), Box<dyn std::error:
             Ok(metadata) => {
                 println!("Format: {}", metadata.format);
                 if let Some(entry) = metadata.entry_point {
-                    println!("Entry Point: {entry:#x}");
+                    println!("Entry Point: {:#x}", entry);
                 }
                 if let Some(sections) = metadata.sections {
-                    println!("Number of Sections: {sections}");
+                    println!("Number of Sections: {}", sections);
                 }
                 if let Some(ph) = metadata.program_headers {
-                    println!("Program Headers: {ph}");
+                    println!("Program Headers: {}", ph);
                 }
                 if let Some(machine) = &metadata.machine {
-                    println!("Machine Type: {machine}");
+                    println!("Machine Type: {}", machine);
                 }
                 if let Some(image_base) = metadata.image_base {
-                    println!("Image Base: {image_base:#x}");
+                    println!("Image Base: {:#x}", image_base);
                 }
                 if let Some(is_64) = metadata.is_64 {
-                    println!("64-bit: {is_64}");
+                    println!("64-bit: {}", is_64);
                 }
                 if let Some(load_cmds) = metadata.load_commands {
-                    println!("Load Commands: {load_cmds}");
+                    println!("Load Commands: {}", load_cmds);
                 }
                 if let Some(cpu) = &metadata.cpu_type {
-                    println!("CPU Type: {cpu}");
+                    println!("CPU Type: {}", cpu);
                 }
                 if let Some(arch_count) = metadata.arch_count {
-                    println!("Architecture Count: {arch_count}");
+                    println!("Architecture Count: {}", arch_count);
                 }
             }
             Err(e) => {
@@ -254,8 +255,8 @@ fn run_standard_cli(matches: clap::ArgMatches) -> Result<(), Box<dyn std::error:
         let instr_count = matches.get_one::<u32>("count").copied().unwrap_or(20);
 
         match disassemble_binary(file_path, instr_count, matches.get_flag("verbose")) {
-            Ok(disasm) => println!("{disasm}"),
-            Err(e) => eprintln!("Disassembly error: {e}"),
+            Ok(disasm) => println!("{}", disasm),
+            Err(e) => eprintln!("Disassembly error: {}", e),
         }
     }
 
@@ -267,7 +268,7 @@ fn run_standard_cli(matches: clap::ArgMatches) -> Result<(), Box<dyn std::error:
 
         match decompile_binary(file_path, matches.get_flag("verbose")) {
             Ok(decompiled) => {
-                println!("{decompiled}");
+                println!("{}", decompiled);
             }
             Err(e) => {
                 eprintln!("{} {}", "[-] Error decompiling binary:".red().bold(), e);
@@ -283,7 +284,7 @@ fn run_standard_cli(matches: clap::ArgMatches) -> Result<(), Box<dyn std::error:
 
         match analyze_callgraph(file_path) {
             Ok(graph) => {
-                println!("{graph}");
+                println!("{}", graph);
             }
             Err(e) => {
                 eprintln!("{} {}", "[-] Error generating call graph:".red().bold(), e);
@@ -329,31 +330,31 @@ fn run_tui(
                 let mut output = String::new();
                 output.push_str(&format!("Format: {}\n", metadata.format));
                 if let Some(entry) = metadata.entry_point {
-                    output.push_str(&format!("Entry Point: {entry:#x}\n"));
+                    output.push_str(&format!("Entry Point: {:#x}\n", entry));
                 }
                 if let Some(sections) = metadata.sections {
-                    output.push_str(&format!("Number of Sections: {sections}\n"));
+                    output.push_str(&format!("Number of Sections: {}\n", sections));
                 }
                 if let Some(ph) = metadata.program_headers {
-                    output.push_str(&format!("Program Headers: {ph}\n"));
+                    output.push_str(&format!("Program Headers: {}\n", ph));
                 }
                 if let Some(machine) = &metadata.machine {
-                    output.push_str(&format!("Machine Type: {machine}\n"));
+                    output.push_str(&format!("Machine Type: {}\n", machine));
                 }
                 if let Some(image_base) = metadata.image_base {
-                    output.push_str(&format!("Image Base: {image_base:#x}\n"));
+                    output.push_str(&format!("Image Base: {:#x}\n", image_base));
                 }
                 if let Some(is_64) = metadata.is_64 {
-                    output.push_str(&format!("64-bit: {is_64}\n"));
+                    output.push_str(&format!("64-bit: {}\n", is_64));
                 }
                 if let Some(load_cmds) = metadata.load_commands {
-                    output.push_str(&format!("Load Commands: {load_cmds}\n"));
+                    output.push_str(&format!("Load Commands: {}\n", load_cmds));
                 }
                 if let Some(cpu) = &metadata.cpu_type {
-                    output.push_str(&format!("CPU Type: {cpu}\n"));
+                    output.push_str(&format!("CPU Type: {}\n", cpu));
                 }
                 if let Some(arch_count) = metadata.arch_count {
-                    output.push_str(&format!("Architecture Count: {arch_count}\n"));
+                    output.push_str(&format!("Architecture Count: {}\n", arch_count));
                 }
                 Ok(output)
             }
@@ -519,7 +520,7 @@ fn draw_ui(f: &mut ratatui::Frame, app: &App) {
             Block::default()
                 .borders(Borders::ALL)
                 .border_type(BorderType::Rounded)
-                .title(format!("{content_title}{scroll_info}")),
+                .title(format!("{}{}", content_title, scroll_info)),
         )
         .style(Style::default().fg(Color::White))
         .wrap(ratatui::widgets::Wrap { trim: true })
