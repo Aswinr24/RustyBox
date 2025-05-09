@@ -35,9 +35,9 @@ pub fn analyze_callgraph(binary_path: &str) -> Result<String, Box<dyn std::error
         Ok(ascii_graph)
     } else {
         let err_msg = String::from_utf8_lossy(&graph_output.stderr).to_string();
-        Err(format!(
-            "graph-easy error:\n{err_msg}\nHint: Install it using `cpanm Graph::Easy`"
+        Err(
+            format!("graph-easy error:\n{err_msg}\nHint: Install it using `cpanm Graph::Easy`")
+                .into(),
         )
-        .into())
     }
 }

@@ -7,9 +7,7 @@ pub fn disassemble_binary(
     count: u32,
     verbose: bool,
 ) -> Result<String, Box<dyn std::error::Error>> {
-    info!(
-        "Starting disassembly of {file_path} ({count} instructions)"
-    );
+    info!("Starting disassembly of {file_path} ({count} instructions)");
 
     // Initialize radare2 with appropriate verbosity
     let mut r2 = R2Pipe::spawn(file_path, None)?;
