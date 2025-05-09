@@ -31,10 +31,6 @@ jobs:
             artifact_name: rustybox
             asset_name: rustybox-linux-amd64
             target: x86_64-unknown-linux-gnu
-          - os: ubuntu-latest
-            artifact_name: rustybox
-            asset_name: rustybox-linux-arm64
-            target: aarch64-unknown-linux-gnu
           - os: windows-latest
             artifact_name: rustybox.exe
             asset_name: rustybox-windows-amd64.exe
@@ -137,7 +133,6 @@ jobs:
 
             The following binaries are available for this release:
             * Linux (amd64)
-            * Linux (arm64)
             * Windows (amd64)
             * macOS (amd64)
             * macOS (arm64)
@@ -147,7 +142,6 @@ jobs:
           prerelease: ${{ steps.check_dev.outputs.is_dev }}
           files: |
             artifacts/rustybox-linux-amd64/rustybox-linux-amd64
-            artifacts/rustybox-linux-arm64/rustybox-linux-arm64
             artifacts/rustybox-windows-amd64.exe/rustybox-windows-amd64.exe
             artifacts/rustybox-macos-amd64/rustybox-macos-amd64
             artifacts/rustybox-macos-arm64/rustybox-macos-arm64
