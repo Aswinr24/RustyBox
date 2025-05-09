@@ -3,15 +3,16 @@ use colored::Colorize;
 use crossterm::{
     event::{self, DisableMouseCapture, EnableMouseCapture, Event, KeyCode},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
 };
 use ratatui::{
+    Terminal,
     backend::CrosstermBackend,
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
-    text::{Line, Span, Text},
-    widgets::{Block, Borders, List, ListItem, Paragraph, Tabs},
-    Terminal,
+    text::{Line, Span},
+    widgets::BorderType,
+    widgets::{Block, Borders, Paragraph, Tabs},
 };
 use std::{
     io,
@@ -21,8 +22,9 @@ use std::{
     time::{Duration, Instant},
 };
 
-// Import our static analysis functions
-use crate::static_analysis::{analyze_callgraph, decompile_binary, disassemble_binary, extract_metadata};
+use crate::static_analysis::{
+    analyze_callgraph, decompile_binary, disassemble_binary, extract_metadata,
+};
 
 const RUSTYBOX_ASCII: &str = r#"
  ____            _         ____            
@@ -31,7 +33,7 @@ const RUSTYBOX_ASCII: &str = r#"
 |  _ <| |_| \__ \ |_| |_| | |_) | (_) >  < 
 |_| \_\\__,_|___/\__|\__, |____/ \___/_/\_\
                      |___/                 
-       Static Binary Analysis Tool
+       Express Binary Analysis Tool
 "#;
 
 enum AnalysisMode {
@@ -54,6 +56,7 @@ struct App {
     file_path: String,
     instr_count: u32,
     verbose: bool,
+    scroll_position: u16,
 }
 
 impl App {
@@ -69,6 +72,7 @@ impl App {
             file_path,
             instr_count,
             verbose,
+            scroll_position: 0,
         }
     }
 
@@ -93,26 +97,69 @@ impl App {
         match self.selected_tab {
             0 => match &self.analysis_results.metadata {
                 Some(Ok(text)) => text.clone(),
-                Some(Err(e)) => format!("Error: {}", e),
+                Some(Err(e)) => format!("Error: {e}"),
                 None => "Loading metadata...".to_string(),
             },
             1 => match &self.analysis_results.disassembly {
                 Some(Ok(text)) => text.clone(),
-                Some(Err(e)) => format!("Error: {}", e),
+                Some(Err(e)) => format!("Error: {e}"),
                 None => "Loading disassembly...".to_string(),
             },
             2 => match &self.analysis_results.decompile {
                 Some(Ok(text)) => text.clone(),
-                Some(Err(e)) => format!("Error: {}", e),
+                Some(Err(e)) => format!("Error: {e}"),
                 None => "Loading decompiled code...".to_string(),
             },
             3 => match &self.analysis_results.callgraph {
                 Some(Ok(text)) => text.clone(),
-                Some(Err(e)) => format!("Error: {}", e),
+                Some(Err(e)) => format!("Error: {e}"),
                 None => "Loading callgraph...".to_string(),
             },
             _ => "Unknown tab".to_string(),
         }
+    }
+    fn scroll_down(&mut self) {
+        let max_scroll = self.get_max_scroll();
+        if self.scroll_position < max_scroll {
+            self.scroll_position += 1;
+        }
+    }
+
+    fn scroll_up(&mut self) {
+        if self.scroll_position > 0 {
+            self.scroll_position -= 1;
+        }
+    }
+
+    fn page_down(&mut self) {
+        let max_scroll = self.get_max_scroll();
+        self.scroll_position = (self.scroll_position + 10).min(max_scroll);
+    }
+
+    fn page_up(&mut self) {
+        self.scroll_position = self.scroll_position.saturating_sub(10);
+    }
+
+    fn scroll_to_top(&mut self) {
+        self.scroll_position = 0;
+    }
+
+    fn scroll_to_bottom(&mut self) {
+        self.scroll_position = self.get_max_scroll();
+    }
+
+    fn get_max_scroll(&self) -> u16 {
+        let content = self.get_current_result_text();
+        let line_count = content.lines().count() as u16;
+
+        let terminal_height = crossterm::terminal::size().unwrap_or((0, 24)).1;
+        let content_height = terminal_height.saturating_sub(6);
+
+        if line_count <= content_height {
+            return 0;
+        }
+
+        line_count.saturating_sub(content_height)
     }
 }
 
@@ -121,13 +168,17 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 
     let file_path = matches.get_one::<String>("FILE").unwrap();
 
-    // Check if file exists
     if !Path::new(file_path).exists() {
-        return Err(format!("File does not exist: {}", file_path).into());
+        return Err(format!("File does not exist: {file_path}").into());
     }
+    let is_flag_used = matches.get_flag("no-tui")
+        || matches.get_flag("metadata")
+        || matches.get_flag("disassemble")
+        || matches.get_flag("decompile")
+        || matches.get_flag("callgraph")
+        || matches.contains_id("log-file");
 
-    // If help was requested or no GUI is requested, run in standard CLI mode
-    if matches.get_flag("no-tui") {
+    if is_flag_used {
         return run_standard_cli(matches);
     }
 
@@ -142,9 +193,8 @@ pub fn run() -> Result<(), Box<dyn std::error::Error>> {
 fn run_standard_cli(matches: clap::ArgMatches) -> Result<(), Box<dyn std::error::Error>> {
     let file_path = matches.get_one::<String>("FILE").unwrap();
 
-    println!("{}", RUSTYBOX_ASCII.cyan().bold());
+    println!("{}", RUSTYBOX_ASCII.truecolor(225, 95, 80).bold());
 
-    // Determine which analyses to run
     let run_all = !matches.get_flag("disassemble")
         && !matches.get_flag("metadata")
         && !matches.get_flag("decompile")
@@ -162,31 +212,31 @@ fn run_standard_cli(matches: clap::ArgMatches) -> Result<(), Box<dyn std::error:
             Ok(metadata) => {
                 println!("Format: {}", metadata.format);
                 if let Some(entry) = metadata.entry_point {
-                    println!("Entry Point: {:#x}", entry);
+                    println!("Entry Point: {entry:#x}");
                 }
                 if let Some(sections) = metadata.sections {
-                    println!("Number of Sections: {}", sections);
+                    println!("Number of Sections: {sections}");
                 }
                 if let Some(ph) = metadata.program_headers {
-                    println!("Program Headers: {}", ph);
+                    println!("Program Headers: {ph}");
                 }
                 if let Some(machine) = &metadata.machine {
-                    println!("Machine Type: {}", machine);
+                    println!("Machine Type: {machine}");
                 }
                 if let Some(image_base) = metadata.image_base {
-                    println!("Image Base: {:#x}", image_base);
+                    println!("Image Base: {image_base:#x}");
                 }
                 if let Some(is_64) = metadata.is_64 {
-                    println!("64-bit: {}", is_64);
+                    println!("64-bit: {is_64}");
                 }
                 if let Some(load_cmds) = metadata.load_commands {
-                    println!("Load Commands: {}", load_cmds);
+                    println!("Load Commands: {load_cmds}");
                 }
                 if let Some(cpu) = &metadata.cpu_type {
-                    println!("CPU Type: {}", cpu);
+                    println!("CPU Type: {cpu}");
                 }
                 if let Some(arch_count) = metadata.arch_count {
-                    println!("Architecture Count: {}", arch_count);
+                    println!("Architecture Count: {arch_count}");
                 }
             }
             Err(e) => {
@@ -204,8 +254,8 @@ fn run_standard_cli(matches: clap::ArgMatches) -> Result<(), Box<dyn std::error:
         let instr_count = matches.get_one::<u32>("count").copied().unwrap_or(20);
 
         match disassemble_binary(file_path, instr_count, matches.get_flag("verbose")) {
-            Ok(disasm) => println!("{}", disasm),
-            Err(e) => eprintln!("Disassembly error: {}", e),
+            Ok(disasm) => println!("{disasm}"),
+            Err(e) => eprintln!("Disassembly error: {e}"),
         }
     }
 
@@ -217,7 +267,7 @@ fn run_standard_cli(matches: clap::ArgMatches) -> Result<(), Box<dyn std::error:
 
         match decompile_binary(file_path, matches.get_flag("verbose")) {
             Ok(decompiled) => {
-                println!("{}", decompiled);
+                println!("{decompiled}");
             }
             Err(e) => {
                 eprintln!("{} {}", "[-] Error decompiling binary:".red().bold(), e);
@@ -233,7 +283,7 @@ fn run_standard_cli(matches: clap::ArgMatches) -> Result<(), Box<dyn std::error:
 
         match analyze_callgraph(file_path) {
             Ok(graph) => {
-                println!("{}", graph);
+                println!("{graph}");
             }
             Err(e) => {
                 eprintln!("{} {}", "[-] Error generating call graph:".red().bold(), e);
@@ -256,23 +306,21 @@ fn run_tui(
     instr_count: u32,
     verbose: bool,
 ) -> Result<(), Box<dyn std::error::Error>> {
-    // Setup terminal
+    println!("{}", RUSTYBOX_ASCII.truecolor(225, 95, 80).bold());
+    std::thread::sleep(Duration::from_secs(2));
     enable_raw_mode()?;
     let mut stdout = io::stdout();
     execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal = Terminal::new(backend)?;
 
-    // Setup app state
     let mut app = App::new(file_path.clone(), instr_count, verbose);
 
-    // Channel for background worker
     let (tx, rx) = mpsc::channel();
     let file_path_clone = file_path.clone();
     let instr_count_clone = instr_count;
     let verbose_clone = verbose;
 
-    // Spawn worker thread that will perform analysis
     thread::spawn(move || {
         // Run all analyses in sequence
         // Metadata
@@ -281,31 +329,31 @@ fn run_tui(
                 let mut output = String::new();
                 output.push_str(&format!("Format: {}\n", metadata.format));
                 if let Some(entry) = metadata.entry_point {
-                    output.push_str(&format!("Entry Point: {:#x}\n", entry));
+                    output.push_str(&format!("Entry Point: {entry:#x}\n"));
                 }
                 if let Some(sections) = metadata.sections {
-                    output.push_str(&format!("Number of Sections: {}\n", sections));
+                    output.push_str(&format!("Number of Sections: {sections}\n"));
                 }
                 if let Some(ph) = metadata.program_headers {
-                    output.push_str(&format!("Program Headers: {}\n", ph));
+                    output.push_str(&format!("Program Headers: {ph}\n"));
                 }
                 if let Some(machine) = &metadata.machine {
-                    output.push_str(&format!("Machine Type: {}\n", machine));
+                    output.push_str(&format!("Machine Type: {machine}\n"));
                 }
                 if let Some(image_base) = metadata.image_base {
-                    output.push_str(&format!("Image Base: {:#x}\n", image_base));
+                    output.push_str(&format!("Image Base: {image_base:#x}\n"));
                 }
                 if let Some(is_64) = metadata.is_64 {
-                    output.push_str(&format!("64-bit: {}\n", is_64));
+                    output.push_str(&format!("64-bit: {is_64}\n"));
                 }
                 if let Some(load_cmds) = metadata.load_commands {
-                    output.push_str(&format!("Load Commands: {}\n", load_cmds));
+                    output.push_str(&format!("Load Commands: {load_cmds}\n"));
                 }
                 if let Some(cpu) = &metadata.cpu_type {
-                    output.push_str(&format!("CPU Type: {}\n", cpu));
+                    output.push_str(&format!("CPU Type: {cpu}\n"));
                 }
                 if let Some(arch_count) = metadata.arch_count {
-                    output.push_str(&format!("Architecture Count: {}\n", arch_count));
+                    output.push_str(&format!("Architecture Count: {arch_count}\n"));
                 }
                 Ok(output)
             }
@@ -314,10 +362,11 @@ fn run_tui(
         tx.send((AnalysisMode::Metadata, metadata_result)).unwrap();
 
         // Disassembly
-        let disasm_result = match disassemble_binary(&file_path_clone, instr_count_clone, verbose_clone) {
-            Ok(disasm) => Ok(disasm),
-            Err(e) => Err(e.to_string()),
-        };
+        let disasm_result =
+            match disassemble_binary(&file_path_clone, instr_count_clone, verbose_clone) {
+                Ok(disasm) => Ok(disasm),
+                Err(e) => Err(e.to_string()),
+            };
         tx.send((AnalysisMode::Disassembly, disasm_result)).unwrap();
 
         // Decompile
@@ -325,14 +374,16 @@ fn run_tui(
             Ok(decompiled) => Ok(decompiled),
             Err(e) => Err(e.to_string()),
         };
-        tx.send((AnalysisMode::Decompile, decompile_result)).unwrap();
+        tx.send((AnalysisMode::Decompile, decompile_result))
+            .unwrap();
 
         // Callgraph
         let callgraph_result = match analyze_callgraph(&file_path_clone) {
             Ok(graph) => Ok(graph),
             Err(e) => Err(e.to_string()),
         };
-        tx.send((AnalysisMode::Callgraph, callgraph_result)).unwrap();
+        tx.send((AnalysisMode::Callgraph, callgraph_result))
+            .unwrap();
     });
 
     // Main loop
@@ -362,14 +413,18 @@ fn run_tui(
             if let Event::Key(key) = event::read()? {
                 match key.code {
                     KeyCode::Char('q') => break,
-                    KeyCode::Right => app.next_tab(),
-                    KeyCode::Left => app.previous_tab(),
-                    KeyCode::Tab => app.next_tab(),
-                    KeyCode::BackTab => app.previous_tab(),
+                    KeyCode::Right | KeyCode::Tab => app.next_tab(),
+                    KeyCode::Left | KeyCode::BackTab => app.previous_tab(),
                     KeyCode::Char('1') => app.selected_tab = 0,
                     KeyCode::Char('2') => app.selected_tab = 1,
                     KeyCode::Char('3') => app.selected_tab = 2,
                     KeyCode::Char('4') => app.selected_tab = 3,
+                    KeyCode::Down => app.scroll_down(),
+                    KeyCode::Up => app.scroll_up(),
+                    KeyCode::PageDown => app.page_down(),
+                    KeyCode::PageUp => app.page_up(),
+                    KeyCode::Home => app.scroll_to_top(),
+                    KeyCode::End => app.scroll_to_bottom(),
                     _ => {}
                 }
             }
@@ -380,7 +435,6 @@ fn run_tui(
         }
     }
 
-    // Restore terminal
     disable_raw_mode()?;
     execute!(
         terminal.backend_mut(),
@@ -393,27 +447,32 @@ fn run_tui(
 }
 
 fn draw_ui(f: &mut ratatui::Frame, app: &App) {
-    // Create main layout
-    let chunks = Layout::default()
+    let terminal_size = f.area();
+
+    let main_layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(8),  // Header with ASCII art
-            Constraint::Length(3),  // Tabs
-            Constraint::Min(0),     // Content
-            Constraint::Length(1),  // Help text
+            Constraint::Length(3),
+            Constraint::Min(5),
+            Constraint::Length(1),
         ])
-        .split(f.area());
+        .split(terminal_size);
 
-    // Draw ASCII Art header
-    let title_text = Text::from(vec![Line::from(vec![
-        Span::styled(RUSTYBOX_ASCII, Style::default().fg(Color::Cyan).add_modifier(Modifier::BOLD)),
-    ])]);
+    let top_bar = Layout::default()
+        .direction(Direction::Horizontal)
+        .constraints([Constraint::Percentage(30), Constraint::Percentage(70)])
+        .split(main_layout[0]);
 
-    let header = Paragraph::new(title_text)
+    let file_info = Paragraph::new(format!(" {}", app.file_path))
         .style(Style::default().fg(Color::Cyan))
-        .block(Block::default());
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title("Target"),
+        );
 
-    f.render_widget(header, chunks[0]);
+    f.render_widget(file_info, top_bar[0]);
 
     // Draw tabs
     let titles = app.tab_titles();
@@ -423,7 +482,11 @@ fn draw_ui(f: &mut ratatui::Frame, app: &App) {
         .collect();
 
     let tabs = Tabs::new(tab_titles)
-        .block(Block::default().borders(Borders::ALL).title("Analysis Modes"))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded),
+        )
         .select(app.selected_tab)
         .style(Style::default().fg(Color::White))
         .highlight_style(
@@ -432,28 +495,71 @@ fn draw_ui(f: &mut ratatui::Frame, app: &App) {
                 .add_modifier(Modifier::BOLD),
         );
 
-    f.render_widget(tabs, chunks[1]);
+    f.render_widget(tabs, top_bar[1]);
 
-    // Get content based on selected tab
+    // Content area
     let content_text = app.get_current_result_text();
+
+    let content_title = match app.selected_tab {
+        0 => "Binary Metadata",
+        1 => "Disassembly",
+        2 => "Decompiled Code",
+        3 => "Function Call Graph",
+        _ => "Unknown",
+    };
+
+    let scroll_info = if app.get_max_scroll() > 0 {
+        format!(" [{}/{}]", app.scroll_position, app.get_max_scroll())
+    } else {
+        String::new()
+    };
+
     let content = Paragraph::new(content_text)
-        .block(Block::default().borders(Borders::ALL).title(match app.selected_tab {
-            0 => "Binary Metadata",
-            1 => "Disassembly",
-            2 => "Decompiled Code",
-            3 => "Function Call Graph",
-            _ => "Unknown",
-        }))
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_type(BorderType::Rounded)
+                .title(format!("{content_title}{scroll_info}")),
+        )
         .style(Style::default().fg(Color::White))
-        .wrap(ratatui::widgets::Wrap { trim: true });
+        .wrap(ratatui::widgets::Wrap { trim: true })
+        .scroll((app.scroll_position, 0));
 
-    f.render_widget(content, chunks[2]);
+    f.render_widget(content, main_layout[1]);
 
-    // Help text
-    let help_text = Paragraph::new("Press Tab/Left/Right to switch tabs | 1-4 to select tab | q to quit")
-        .style(Style::default().fg(Color::DarkGray));
+    // Help bar at bottom
+    let status = match app.selected_tab {
+        0 => "Metadata ▶",
+        1 => "Disassembly ▶",
+        2 => "Decompile ▶",
+        3 => "Callgraph ▶",
+        _ => "Unknown",
+    };
 
-    f.render_widget(help_text, chunks[3]);
+    let help_text = Line::from(vec![
+        Span::styled(
+            " q ",
+            Style::default()
+                .bg(Color::Red)
+                .fg(Color::White)
+                .add_modifier(Modifier::BOLD),
+        ),
+        Span::raw(" quit | "),
+        Span::styled(" ←→ ", Style::default().bg(Color::Blue).fg(Color::White)),
+        Span::raw(" change view | "),
+        Span::styled(" ↑↓ ", Style::default().bg(Color::Blue).fg(Color::White)),
+        Span::raw(" scroll | "),
+        Span::styled(
+            status,
+            Style::default()
+                .fg(Color::Cyan)
+                .add_modifier(Modifier::BOLD),
+        ),
+    ]);
+
+    let help_bar = Paragraph::new(help_text).style(Style::default().bg(Color::DarkGray));
+
+    f.render_widget(help_bar, main_layout[2]);
 }
 
 fn create_cli() -> Command {

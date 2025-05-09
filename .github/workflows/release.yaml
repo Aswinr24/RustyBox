@@ -1,0 +1,151 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v[0-9]+.[0-9]+.[0-9]+"
+
+jobs:
+  # First validate the build works properly
+  build_and_test:
+    name: Build and Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+      - name: Build
+        run: cargo build --all-features --release
+      - name: Run tests
+        run: cargo test --all-features
+
+  # Build for all target platforms
+  build_release:
+    name: Build Release Binaries
+    needs: build_and_test
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-latest
+            artifact_name: rustybox
+            asset_name: rustybox-linux-amd64
+            target: x86_64-unknown-linux-gnu
+          - os: ubuntu-latest
+            artifact_name: rustybox
+            asset_name: rustybox-linux-arm64
+            target: aarch64-unknown-linux-gnu
+          - os: windows-latest
+            artifact_name: rustybox.exe
+            asset_name: rustybox-windows-amd64.exe
+            target: x86_64-pc-windows-msvc
+          - os: macos-latest
+            artifact_name: rustybox
+            asset_name: rustybox-macos-amd64
+            target: x86_64-apple-darwin
+          - os: macos-latest
+            artifact_name: rustybox
+            asset_name: rustybox-macos-arm64
+            target: aarch64-apple-darwin
+
+    steps:
+      - uses: actions/checkout@v3
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          toolchain: stable
+          targets: ${{ matrix.target }}
+
+      # Install cross-compilation tools where needed
+      - name: Install cross-compilation dependencies
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      # Build the binary
+      - name: Build binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      # Rename binary for upload
+      - name: Prepare binary
+        shell: bash
+        run: |
+          mkdir -p release
+          if [ "${{ matrix.os }}" = "windows-latest" ]; then
+            cp target/${{ matrix.target }}/release/${{ matrix.artifact_name }} release/${{ matrix.asset_name }}
+          else
+            cp target/${{ matrix.target }}/release/${{ matrix.artifact_name }} release/${{ matrix.asset_name }}
+            chmod +x release/${{ matrix.asset_name }}
+          fi
+
+      # Upload artifacts for release job
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: ${{ matrix.asset_name }}
+          path: release/${{ matrix.asset_name }}
+          if-no-files-found: error
+
+  # Create GitHub Release with all binaries
+  create_release:
+    name: Create GitHub Release
+    needs: build_release
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # Required for creating releases
+    steps:
+      - uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      # Download all artifacts
+      - name: Download all artifacts
+        uses: actions/download-artifact@v3
+        with:
+          path: artifacts
+
+      # Generate release notes from git log
+      - name: Generate Release Notes
+        id: generate_notes
+        run: |
+          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -z "$PREVIOUS_TAG" ]; then
+            git log --pretty=format:"* %s (%h)" > RELEASE_NOTES.md
+          else
+            git log --pretty=format:"* %s (%h)" $PREVIOUS_TAG..HEAD > RELEASE_NOTES.md
+          fi
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
+          cat RELEASE_NOTES.md >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
+
+      # Create the release
+      - name: Create Release
+        id: create_release
+        uses: softprops/action-gh-release@v1
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref_name }}
+          name: Release ${{ github.ref_name }}
+          body: |
+            ## Release Notes
+
+            ${{ env.RELEASE_NOTES }}
+
+            ## Binary Downloads
+
+            The following binaries are available for this release:
+            * Linux (amd64)
+            * Linux (arm64)
+            * Windows (amd64)
+            * macOS (amd64)
+            * macOS (arm64)
+          draft: false
+          prerelease: false
+          files: |
+            artifacts/rustybox-linux-amd64/rustybox-linux-amd64
+            artifacts/rustybox-linux-arm64/rustybox-linux-arm64
+            artifacts/rustybox-windows-amd64.exe/rustybox-windows-amd64.exe
+            artifacts/rustybox-macos-amd64/rustybox-macos-amd64
+            artifacts/rustybox-macos-arm64/rustybox-macos-arm64

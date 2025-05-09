@@ -1,14 +1,16 @@
 use std::fs;
 use std::process::{Command, Stdio};
-use std::path::Path;
-use std::io::Write;
 
 pub fn analyze_callgraph(binary_path: &str) -> Result<String, Box<dyn std::error::Error>> {
     let dot_path = "callgraph.dot";
 
     // Step 1: Run radare2 and capture DOT callgraph output
     let output = Command::new("r2")
-        .args(["-Aqc", "e bin.relocs.apply=true; e bin.cache=true; aa; agfd", binary_path])
+        .args([
+            "-Aqc",
+            "e bin.relocs.apply=true; e bin.cache=true; aa; agfd",
+            binary_path,
+        ])
         .stdout(Stdio::piped())
         .output()?;
 
@@ -34,8 +36,7 @@ pub fn analyze_callgraph(binary_path: &str) -> Result<String, Box<dyn std::error
     } else {
         let err_msg = String::from_utf8_lossy(&graph_output.stderr).to_string();
         Err(format!(
-            "graph-easy error:\n{}\nHint: Install it using `cpanm Graph::Easy`",
-            err_msg
+            "graph-easy error:\n{err_msg}\nHint: Install it using `cpanm Graph::Easy`"
         )
         .into())
     }

@@ -1,6 +1,6 @@
 use goblin::Object;
-use std::fs;
 use std::convert::TryInto;
+use std::fs;
 
 #[derive(Debug)]
 pub struct BinaryMetadata {

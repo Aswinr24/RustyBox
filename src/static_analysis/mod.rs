@@ -1,11 +1,11 @@
 // Export all modules
-pub mod disassembly;
-pub mod decompilation;
-pub mod metadata;
 pub mod callgraph;
+pub mod decompilation;
+pub mod disassembly;
+pub mod metadata;
 
 // Re-export key functions for convenience
-pub use disassembly::disassemble_binary;
-pub use decompilation::decompile_binary;
-pub use metadata::extract_metadata;
 pub use callgraph::analyze_callgraph;
+pub use decompilation::decompile_binary;
+pub use disassembly::disassemble_binary;
+pub use metadata::extract_metadata;

@@ -1,10 +1,13 @@
+use log::{debug, error, info};
 use r2pipe::R2Pipe;
-use log::{info, debug, error};
 
 /// Use Radare2's native decompiler (pdd) and return the decompiled output as a String
-pub fn decompile_binary(file_path: &str, verbose: bool) -> Result<String, Box<dyn std::error::Error>> {
-    info!("Starting decompilation of {}", file_path);
-    
+pub fn decompile_binary(
+    file_path: &str,
+    verbose: bool,
+) -> Result<String, Box<dyn std::error::Error>> {
+    info!("Starting decompilation of {file_path}");
+
     // Initialize radare2 instance
     let mut r2 = match R2Pipe::spawn(file_path, None) {
         Ok(r2) => {
@@ -12,7 +15,7 @@ pub fn decompile_binary(file_path: &str, verbose: bool) -> Result<String, Box<dy
             r2
         }
         Err(e) => {
-            error!("Failed to spawn r2pipe: {}", e);
+            error!("Failed to spawn r2pipe: {e}");
             return Err(e.into());
         }
     };
@@ -39,7 +42,7 @@ pub fn decompile_binary(file_path: &str, verbose: bool) -> Result<String, Box<dy
     match r2.cmd("aaa") {
         Ok(_) => debug!("Analysis completed successfully"),
         Err(e) => {
-            error!("Analysis failed during decompilation: {}", e);
+            error!("Analysis failed during decompilation: {e}");
             return Err(e.into());
         }
     }
@@ -52,7 +55,7 @@ pub fn decompile_binary(file_path: &str, verbose: bool) -> Result<String, Box<dy
             code
         }
         Err(e) => {
-            error!("Decompiler command failed: {}", e);
+            error!("Decompiler command failed: {e}");
             return Err(e.into());
         }
     };
