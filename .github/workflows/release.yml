@@ -31,10 +31,10 @@ jobs:
             artifact_name: rustybox
             asset_name: rustybox-linux-amd64
             target: x86_64-unknown-linux-gnu
-          - os: windows-latest
-            artifact_name: rustybox.exe
-            asset_name: rustybox-windows-amd64.exe
-            target: x86_64-pc-windows-msvc
+          # - os: windows-latest
+          #   artifact_name: rustybox.exe
+          #   asset_name: rustybox-windows-amd64.exe
+          #   target: x86_64-pc-windows-msvc
           - os: macos-latest
             artifact_name: rustybox
             asset_name: rustybox-macos-amd64
@@ -142,6 +142,5 @@ jobs:
           prerelease: ${{ steps.check_dev.outputs.is_dev }}
           files: |
             artifacts/rustybox-linux-amd64/rustybox-linux-amd64
-            artifacts/rustybox-windows-amd64.exe/rustybox-windows-amd64.exe
             artifacts/rustybox-macos-amd64/rustybox-macos-amd64
             artifacts/rustybox-macos-arm64/rustybox-macos-arm64
