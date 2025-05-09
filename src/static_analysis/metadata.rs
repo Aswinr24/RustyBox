@@ -1,5 +1,6 @@
 use goblin::Object;
 use std::fs;
+use std::convert::TryInto;
 
 #[derive(Debug)]
 pub struct BinaryMetadata {
@@ -40,9 +41,9 @@ pub fn extract_metadata(file_path: &str) -> Result<BinaryMetadata, Box<dyn std::
         }
         Object::PE(pe) => {
             metadata.format = "PE".to_string();
-            metadata.entry_point = Some(pe.entry);
+            metadata.entry_point = Some(pe.entry.try_into().unwrap_or(0));
             metadata.sections = Some(pe.sections.len());
-            metadata.image_base = Some(pe.image_base);
+            metadata.image_base = Some(pe.image_base.try_into().unwrap_or(0));
             metadata.machine = Some(format!("{:?}", pe.header.coff_header.machine));
         }
         Object::Mach(mach_obj) => {
@@ -50,7 +51,7 @@ pub fn extract_metadata(file_path: &str) -> Result<BinaryMetadata, Box<dyn std::
             match mach_obj {
                 goblin::mach::Mach::Binary(macho) => {
                     metadata.is_64 = Some(macho.is_64);
-                    metadata.load_commands = Some(macho.header.ncmds);
+                    metadata.load_commands = Some(macho.header.ncmds.try_into().unwrap_or(0));
                     metadata.cpu_type = Some(format!("{:?}", macho.header.cputype));
                 }
                 goblin::mach::Mach::Fat(fat) => {
