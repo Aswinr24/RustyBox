@@ -1,0 +1,15 @@
+name: Static Analysis
+
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  sast:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - name: Install cargo-deny
+        run: cargo install --locked cargo-deny
+      - name: Run cargo-deny
+        run: cargo deny check bans licenses sources
