@@ -104,11 +104,9 @@ jobs:
             git log --pretty=format:"* %s (%h)" $PREVIOUS_TAG..HEAD > RELEASE_NOTES.md
           fi
 
-          {
-            echo "RELEASE_NOTES<<EOF"
-            cat RELEASE_NOTES.md
-            echo "EOF"
-          } >> $GITHUB_ENV
+          echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
+          cat RELEASE_NOTES.md >> $GITHUB_ENV
+          echo "EOF" >> $GITHUB_ENV
 
       - name: Check if development release
         id: check_dev
@@ -121,7 +119,7 @@ jobs:
 
       - name: Create Release
         id: create_release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
