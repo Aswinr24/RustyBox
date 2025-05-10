@@ -14,7 +14,7 @@
 
 ### 1. Run Basic Static Analysis
 
-cargo run -- malware.exe
+rustybox -- malware.exe
 
 
 * Disassembles the binary and generates a callgraph in ASCII.
@@ -23,7 +23,7 @@ cargo run -- malware.exe
 ### 2. Run Binary Parsing Mode
 
 
-cargo run -- malware.exe binaryp
+rustybox -- malware.exe binaryp
 
 
 * Parses metadata, PE header info, imports/exports, and section details using LIEF.
@@ -31,7 +31,7 @@ cargo run -- malware.exe binaryp
 ### 3. Enable Verbose Mode (for deeper insights)
 
 
-cargo run -- malware.exe -v
+rustybox -- malware.exe -v
 
 
 * Provides verbose logging for debugging or educational output.
@@ -49,8 +49,10 @@ cargo run -- malware.exe -v
 ### Clone and Build
 
 
-git clone https://github.com/yourusername/rustybox.git
+git clone https://github.com/Aswinr24/rustybox.git
+
 cd rustybox
+
 cargo build --release
 
 
@@ -62,17 +64,6 @@ cargo build --release
 * **Binary Parsing** – LIEF
 * **Visualization** – Graph-Easy, CFG rendering
 * **(Upcoming)** – Firecracker/QEMU for isolated dynamic execution
-
-## Example Output
-
-
-Call Graph (ASCII):
-┌────────────┐
-│ main       │
-├────────────┤
-│ call sub1  │
-│ call sub2  │
-└────────────┘
 
 
 ## Contributing
