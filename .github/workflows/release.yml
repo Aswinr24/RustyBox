@@ -94,20 +94,6 @@ jobs:
         with:
           path: artifacts
 
-      - name: Generate Release Notes
-        id: generate_notes
-        run: |
-          PREVIOUS_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
-          if [ -z "$PREVIOUS_TAG" ]; then
-            git log --pretty=format:"* %s (%h)" > RELEASE_NOTES.md
-          else
-            git log --pretty=format:"* %s (%h)" $PREVIOUS_TAG..HEAD > RELEASE_NOTES.md
-          fi
-
-          echo "RELEASE_NOTES<<EOF" >> $GITHUB_ENV
-          cat RELEASE_NOTES.md >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
-
       - name: Check if development release
         id: check_dev
         run: |
@@ -126,15 +112,10 @@ jobs:
           tag_name: ${{ github.ref_name }}
           name: ${{ steps.check_dev.outputs.is_dev == 'true' && format('Development Release {0}', github.ref_name) || format('Release {0}', github.ref_name) }}
           body: |
-            ## Release Notes
-
-            ${{ env.RELEASE_NOTES }}
-
             ## Binary Downloads
 
             The following binaries are available for this release:
             * Linux (amd64)
-            * Windows (amd64)
             * macOS (amd64)
             * macOS (arm64)
 
