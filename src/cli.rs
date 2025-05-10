@@ -23,7 +23,7 @@ use std::{
 };
 
 use crate::static_analysis::{
-    analyze_callgraph, decompile_binary, disassemble_binary, extract_metadata,
+    analyze_callgraph, decompile_binary, disassemble_binary, extract_metadata, analyze_binary,
 };
 
 const RUSTYBOX_ASCII: &str = r#"
@@ -195,6 +195,15 @@ fn run_standard_cli(matches: clap::ArgMatches) -> Result<(), Box<dyn std::error:
     let file_path = matches.get_one::<String>("FILE").unwrap();
 
     println!("{}", RUSTYBOX_ASCII.truecolor(225, 95, 80).bold());
+
+
+    if matches.get_flag("binaryp") {
+        if let Err(e) = crate::static_analysis::analyze_binary(file_path) {
+            eprintln!("Error analyzing binary: {}", e);
+        }
+        return Ok(()); // Exit after running the binaryp command
+    }
+
 
     let run_all = !matches.get_flag("disassemble")
         && !matches.get_flag("metadata")
@@ -627,6 +636,13 @@ fn create_cli() -> Command {
             Arg::new("no-tui")
                 .long("no-tui")
                 .help("Run in classic command-line mode without TUI")
+                .action(clap::ArgAction::SetTrue),
+        )
+
+        .arg(
+            Arg::new("binaryp")
+                .long("binaryp")
+                .help("Analyze the binary using the binaryp command")
                 .action(clap::ArgAction::SetTrue),
         )
 }
