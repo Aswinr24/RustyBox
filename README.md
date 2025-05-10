@@ -73,10 +73,3 @@ We welcome pull requests and feature ideas. Please submit issues and suggestions
 ## License
 
 Apache 2.0 – Free to use, modify, and distribute.
-
----
-
-**RustyBox** – Built for the community. Securing binaries, one disassembly at a time.
-
-
-```
